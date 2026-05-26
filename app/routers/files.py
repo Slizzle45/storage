@@ -20,8 +20,7 @@ def upload_file(path: str, file: UploadFile = File(...)) -> dict:
     target = resolve_safe(path)
     if target == STORAGE_ROOT or target.is_dir():
         raise HTTPException(status_code=400, detail="Invalid file path")
-    if not target.parent.exists():
-        raise HTTPException(status_code=404, detail="Parent folder not found")
+    target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         raise HTTPException(status_code=409, detail="File already exists")
     size = _write_upload(file, target)
