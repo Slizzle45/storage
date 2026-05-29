@@ -1,6 +1,6 @@
 import shutil
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 
 from ..config import STORAGE_ROOT
@@ -16,14 +16,24 @@ def _write_upload(upload: UploadFile, destination) -> int:
 
 
 @router.post("/files/{path:path}", status_code=status.HTTP_201_CREATED)
-def upload_file(path: str, file: UploadFile = File(...)) -> dict:
+async def upload_file(path: str, request: Request, file: UploadFile = File(None)) -> dict:
     target = resolve_safe(path)
     if target == STORAGE_ROOT or target.is_dir():
         raise HTTPException(status_code=400, detail="Invalid file path")
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         raise HTTPException(status_code=409, detail="File already exists")
-    size = _write_upload(file, target)
+
+    if file is not None:
+        size = _write_upload(file, target)
+    else:
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="No file content provided")
+        with target.open("wb") as out:
+            out.write(body)
+        size = target.stat().st_size
+
     return {
         "path": target.relative_to(STORAGE_ROOT).as_posix(),
         "size": size,
@@ -40,11 +50,21 @@ def download_file(path: str) -> FileResponse:
 
 
 @router.put("/files/{path:path}")
-def replace_file(path: str, file: UploadFile = File(...)) -> dict:
+async def replace_file(path: str, request: Request, file: UploadFile = File(None)) -> dict:
     target = resolve_safe(path)
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    size = _write_upload(file, target)
+
+    if file is not None:
+        size = _write_upload(file, target)
+    else:
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="No file content provided")
+        with target.open("wb") as out:
+            out.write(body)
+        size = target.stat().st_size
+
     return {
         "path": target.relative_to(STORAGE_ROOT).as_posix(),
         "size": size,
