@@ -22,7 +22,7 @@ async def upload_file(path: str, request: Request, file: UploadFile = File(None)
         raise HTTPException(status_code=400, detail="Invalid file path")
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        raise HTTPException(status_code=409, detail="File already exists")
+        return {"path": target.relative_to(STORAGE_ROOT).as_posix(), "size": target.stat().st_size, "skipped": True}
 
     if file is not None:
         size = _write_upload(file, target)
